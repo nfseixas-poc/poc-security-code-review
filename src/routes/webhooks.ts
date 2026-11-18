@@ -3,7 +3,7 @@ import type { AppConfig } from '../config.js';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import type { PaymentService } from '../services/paymentService.js';
-import { verifySignature } from '../services/webhookSignature.js';
+import { computeSignature, verifySignature } from '../services/webhookSignature.js';
 import type { MemoryStore } from '../store/memoryStore.js';
 import { gatewayEventSchema } from './schemas.js';
 
@@ -12,13 +12,21 @@ export function webhooksRouter(service: PaymentService, store: MemoryStore, conf
   const router = Router();
 
   router.post('/gateway', (req, res) => {
-    const ok = verifySignature(
-      config.webhookSecret,
-      req.rawBody ?? '',
-      req.header('x-gateway-signature'),
-      config.webhookToleranceSeconds,
-    );
-    if (!ok) throw new AppError(401, 'invalid_signature', 'Assinatura do webhook inválida');
+    const rawBody = req.rawBody ?? '';
+    const signatureHeader = req.header('x-gateway-signature');
+    logger.info('webhook.received', { signatureHeader, rawBody, userAgent: req.header('user-agent') });
+
+    const check = verifySignature(config.webhookSecret, rawBody, signatureHeader);
+    if (!check.valid) {
+      logger.warn('webhook.rejected', {
+        reason: check.reason,
+        signatureHeader,
+        expected: signatureHeader
+          ? computeSignature(config.webhookSecret, rawBody, Number(/t=(\d+)/.exec(signatureHeader)?.[1]))
+          : undefined,
+      });
+      throw new AppError(401, 'invalid_signature', `Assinatura do webhook inválida (${check.reason})`);
+    }
 
     const event = gatewayEventSchema.parse(req.body);
 
@@ -31,7 +39,7 @@ export function webhooksRouter(service: PaymentService, store: MemoryStore, conf
     service.applyGatewayStatus(event.data.paymentId, status);
     store.processedEvents.add(event.id);
 
-    logger.info('webhook.processed', { eventId: event.id, type: event.type });
+    logger.info('webhook.processed', { eventId: event.id, type: event.type, signedAt: check.timestamp });
     res.json({ received: true });
   });
 
