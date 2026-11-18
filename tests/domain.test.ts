@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { detectBrand, isExpired, isValidLuhn, summarizeCard } from '../src/domain/card.js';
-import { calculateFee } from '../src/domain/fees.js';
+import { calculateFee, INSTALLMENT_SURCHARGE_BPS, MAX_INSTALLMENTS } from '../src/domain/fees.js';
 import { canTransition } from '../src/domain/stateMachine.js';
 
 describe('calculateFee', () => {
@@ -15,8 +15,18 @@ describe('calculateFee', () => {
   });
 
   it('cartão: 3,99% + R$0,39, +1,49% por parcela extra', () => {
-    expect(calculateFee(10_000, 'credit_card', 1)).toBe(399 + 39);
-    expect(calculateFee(10_000, 'credit_card', 3)).toBe(399 + 2 * 149 + 39);
+    expect(calculateFee(10_000, 'credit_card', 1)).toBe(587);
+    expect(calculateFee(10_000, 'credit_card', 3)).toBe(885);
+  });
+
+  it('tabela de acréscimo por parcelas', () => {
+    expect(INSTALLMENT_SURCHARGE_BPS).toHaveLength(MAX_INSTALLMENTS);
+    expect(INSTALLMENT_SURCHARGE_BPS[0]).toBe(0);
+    expect(INSTALLMENT_SURCHARGE_BPS[1]).toBe(149);
+  });
+
+  it('parcelamento só no cartão', () => {
+    expect(() => calculateFee(10_000, 'pix', 2)).toThrow(RangeError);
   });
 
   it('rejeita valores e parcelas inválidos', () => {
