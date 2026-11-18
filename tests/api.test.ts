@@ -83,6 +83,34 @@ describe('pagamentos com cartão', () => {
   });
 });
 
+describe('compra em 1 clique', () => {
+  it('salva cartão e paga usando cardId', async () => {
+    const saved = await request(app)
+      .post('/v1/cards')
+      .set('Authorization', ACME)
+      .send({ customerEmail: 'cliente@example.com', card: validCard });
+    expect(saved.status).toBe(201);
+    expect(saved.body).toMatchObject({ brand: 'visa', last4: '1111', customerEmail: 'cliente@example.com' });
+
+    const pay = await createPayment({ amount: 3_000, method: 'credit_card', cardId: saved.body.id });
+    expect(pay.status).toBe(201);
+    expect(pay.body).toMatchObject({ status: 'captured', card: { last4: '1111' } });
+  });
+
+  it('lista cartões do cliente apenas do próprio lojista', async () => {
+    await request(app).post('/v1/cards').set('Authorization', ACME).send({ customerEmail: 'a@example.com', card: validCard });
+    await request(app).post('/v1/cards').set('Authorization', GLOBEX).send({ customerEmail: 'a@example.com', card: validCard });
+
+    const list = await request(app).get('/v1/cards?customerEmail=a@example.com').set('Authorization', ACME);
+    expect(list.body.data).toHaveLength(1);
+  });
+
+  it('cardId inexistente retorna 404', async () => {
+    const res = await createPayment({ amount: 3_000, method: 'credit_card', cardId: 'card_000000000000000000000000' });
+    expect(res.status).toBe(404);
+  });
+});
+
 describe('isolamento entre lojistas', () => {
   it('um lojista não enxerga pagamento de outro', async () => {
     const created = await createPayment({ amount: 1_000, method: 'pix' }, ACME);

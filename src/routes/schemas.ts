@@ -4,7 +4,7 @@ import { MAX_INSTALLMENTS } from '../domain/fees.js';
 /** R$ 0,50 a R$ 100.000,00, sempre em centavos inteiros. */
 const amountCents = z.number().int().min(50).max(10_000_000);
 
-const cardSchema = z.object({
+export const cardSchema = z.object({
   number: z.string().regex(/^\d{12,19}$/, 'número deve ter 12 a 19 dígitos'),
   expMonth: z.number().int().min(1).max(12),
   expYear: z.number().int().min(2000).max(2100),
@@ -20,13 +20,14 @@ export const createPaymentSchema = z
     capture: z.boolean().optional(),
     description: z.string().trim().max(255).optional(),
     card: cardSchema.optional(),
+    cardId: z.string().regex(/^card_[a-f0-9]{24}$/).optional(),
   })
   .strict()
-  .refine((p) => p.method !== 'credit_card' || p.card !== undefined, {
-    message: 'card é obrigatório quando method = credit_card',
+  .refine((p) => p.method !== 'credit_card' || p.card !== undefined || p.cardId !== undefined, {
+    message: 'card ou cardId é obrigatório quando method = credit_card',
     path: ['card'],
   })
-  .refine((p) => p.method === 'credit_card' || p.card === undefined, {
+  .refine((p) => p.method === 'credit_card' || (p.card === undefined && p.cardId === undefined), {
     message: 'card só é aceito quando method = credit_card',
     path: ['card'],
   });
@@ -53,4 +54,15 @@ export const gatewayEventSchema = z.object({
   id: z.string().min(1).max(100),
   type: z.enum(['payment.paid', 'payment.failed']),
   data: z.object({ paymentId: z.string().min(1) }),
+});
+
+export const saveCardSchema = z
+  .object({
+    customerEmail: z.email(),
+    card: cardSchema,
+  })
+  .strict();
+
+export const listCardsQuery = z.object({
+  customerEmail: z.email().optional(),
 });

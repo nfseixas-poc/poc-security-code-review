@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import type { Merchant, Payment, Refund } from '../domain/types.js';
+import type { Merchant, Payment, Refund, SavedCard } from '../domain/types.js';
 
 export function hashApiKey(apiKey: string): string {
   return createHash('sha256').update(apiKey).digest('hex');
@@ -22,6 +22,7 @@ export class MemoryStore {
   readonly merchants = new Map<string, Merchant>();
   readonly payments = new Map<string, Payment>();
   readonly refunds = new Map<string, Refund>();
+  readonly savedCards = new Map<string, SavedCard>();
   /** Webhooks já processados (proteção contra replay). */
   readonly processedEvents = new Set<string>();
   private readonly idempotency = new Map<string, IdempotencyRecord>();
