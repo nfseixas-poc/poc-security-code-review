@@ -35,10 +35,10 @@ export function paymentsRouter(service: PaymentService, store: MemoryStore): Rou
     res.json(service.cancel(currentMerchant(req).id, id));
   });
 
-  router.post('/:id/refunds', idem, (req, res) => {
+  router.post('/:id/refunds', idem, async (req, res) => {
     const { id } = paymentIdParam.parse(req.params);
     const { amount, reason } = createRefundSchema.parse(req.body ?? {});
-    res.status(201).json(service.refund(currentMerchant(req).id, id, amount, reason));
+    res.status(201).json(await service.refund(currentMerchant(req).id, id, amount, reason));
   });
 
   return router;

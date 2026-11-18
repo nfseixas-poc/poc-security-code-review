@@ -5,6 +5,7 @@ import type { Payment, PaymentMethod, PaymentStatus, Refund } from '../domain/ty
 import { AppError, invalidState, notFound } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { newId, type MemoryStore } from '../store/memoryStore.js';
+import { FakeGatewayClient, type GatewayClient } from './gatewayClient.js';
 
 /** Cartão de teste que o "gateway" sempre recusa. */
 export const DECLINED_TEST_CARD = '4000000000000002';
@@ -32,7 +33,10 @@ export interface ListPaymentsFilter {
 }
 
 export class PaymentService {
-  constructor(private readonly store: MemoryStore) {}
+  constructor(
+    private readonly store: MemoryStore,
+    private readonly gateway: GatewayClient = new FakeGatewayClient(),
+  ) {}
 
   create(merchantId: string, input: CreatePaymentInput): Payment {
     const installments = input.method === 'credit_card' ? (input.installments ?? 1) : 1;
@@ -116,7 +120,7 @@ export class PaymentService {
     return this.transition(payment, 'canceled');
   }
 
-  refund(merchantId: string, paymentId: string, amount: number | undefined, reason?: string): Refund {
+  async refund(merchantId: string, paymentId: string, amount: number | undefined, reason?: string): Promise<Refund> {
     const payment = this.get(merchantId, paymentId);
     if (payment.status !== 'captured' && payment.status !== 'partially_refunded') {
       throw invalidState(`Só é possível estornar pagamentos capturados (status atual: ${payment.status})`);
@@ -128,8 +132,12 @@ export class PaymentService {
       throw new AppError(422, 'invalid_amount', `Valor de estorno deve estar entre 1 e ${refundable}`);
     }
 
+    // Estorno no adquirente antes de atualizar nosso registro.
+    const { gatewayRefundId } = await this.gateway.refund(paymentId, refundAmount);
+
     payment.refundedAmount += refundAmount;
-    this.transition(payment, payment.refundedAmount === payment.amount ? 'refunded' : 'partially_refunded');
+    payment.status = payment.refundedAmount >= payment.amount ? 'refunded' : 'partially_refunded';
+    payment.updatedAt = new Date().toISOString();
 
     const refund: Refund = {
       id: newId('ref'),
@@ -137,11 +145,28 @@ export class PaymentService {
       merchantId,
       amount: refundAmount,
       reason,
+      gatewayRefundId,
       createdAt: new Date().toISOString(),
     };
     this.store.refunds.set(refund.id, refund);
     logger.info('refund.created', { refundId: refund.id, paymentId, amount: refundAmount });
     return refund;
+  }
+
+  /** Estornos em lote (ex.: cancelamento de vários pedidos de uma vez). */
+  async refundBatch(merchantId: string, items: { paymentId: string; amount?: number; reason?: string }[]) {
+    const results = await Promise.allSettled(
+      items.map((item) => this.refund(merchantId, item.paymentId, item.amount, item.reason)),
+    );
+    return results.map((r, i) =>
+      r.status === 'fulfilled'
+        ? { paymentId: items[i]!.paymentId, ok: true as const, refund: r.value }
+        : {
+            paymentId: items[i]!.paymentId,
+            ok: false as const,
+            error: r.reason instanceof AppError ? r.reason.code : 'internal_error',
+          },
+    );
   }
 
   /** Saldo líquido do lojista: capturado - estornado - taxas. */

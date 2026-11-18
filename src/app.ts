@@ -3,13 +3,19 @@ import type { AppConfig } from './config.js';
 import { currentMerchant, requireApiKey } from './middleware/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { paymentsRouter } from './routes/payments.js';
+import { refundsRouter } from './routes/refunds.js';
 import { webhooksRouter } from './routes/webhooks.js';
+import type { GatewayClient } from './services/gatewayClient.js';
 import { PaymentService } from './services/paymentService.js';
 import { createSeededStore, type MemoryStore } from './store/memoryStore.js';
 
-export function createApp(config: AppConfig, store: MemoryStore = createSeededStore()): Express {
+export function createApp(
+  config: AppConfig,
+  store: MemoryStore = createSeededStore(),
+  gateway?: GatewayClient,
+): Express {
   const app = express();
-  const service = new PaymentService(store);
+  const service = new PaymentService(store, gateway);
 
   app.disable('x-powered-by');
   app.use(
@@ -31,6 +37,7 @@ export function createApp(config: AppConfig, store: MemoryStore = createSeededSt
   const v1 = express.Router();
   v1.use(requireApiKey(store));
   v1.use('/payments', paymentsRouter(service, store));
+  v1.use('/refunds', refundsRouter(service, store));
   v1.get('/balance', (req, res) => {
     res.json(service.balance(currentMerchant(req).id));
   });

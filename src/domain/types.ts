@@ -46,5 +46,7 @@ export interface Refund {
   merchantId: string;
   amount: number;
   reason?: string;
+  /** Identificador do estorno no adquirente. */
+  gatewayRefundId: string;
   createdAt: string;
 }
