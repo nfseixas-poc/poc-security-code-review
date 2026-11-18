@@ -2,6 +2,7 @@ import express, { type Express } from 'express';
 import type { AppConfig } from './config.js';
 import { currentMerchant, requireApiKey } from './middleware/auth.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { merchantRouter } from './routes/merchant.js';
 import { paymentsRouter } from './routes/payments.js';
 import { webhooksRouter } from './routes/webhooks.js';
 import { PaymentService } from './services/paymentService.js';
@@ -31,6 +32,7 @@ export function createApp(config: AppConfig, store: MemoryStore = createSeededSt
   const v1 = express.Router();
   v1.use(requireApiKey(store));
   v1.use('/payments', paymentsRouter(service, store));
+  v1.use('/merchant', merchantRouter());
   v1.get('/balance', (req, res) => {
     res.json(service.balance(currentMerchant(req).id));
   });

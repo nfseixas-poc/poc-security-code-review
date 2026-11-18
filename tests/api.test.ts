@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
 import type { AppConfig } from '../src/config.js';
 import { signPayload } from '../src/services/webhookSignature.js';
@@ -143,6 +143,41 @@ describe('estornos e saldo', () => {
 
     const bal = await request(app).get('/v1/balance').set('Authorization', ACME);
     expect(bal.body).toEqual({ currency: 'BRL', gross: 10_000, refunded: 1_000, fees: 438, net: 8_562 });
+  });
+});
+
+describe('notificações do lojista', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('configura URL e envia ping de teste', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('pong', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await request(app)
+      .put('/v1/merchant/notification-url')
+      .set('Authorization', ACME)
+      .send({ url: 'https://loja.example.com/hooks' })
+      .expect(200);
+
+    const res = await request(app).post('/v1/merchant/notification-url/test').set('Authorization', ACME);
+    expect(res.body).toMatchObject({ url: 'https://loja.example.com/hooks', ok: true, status: 200, body: 'pong' });
+    expect(fetchMock).toHaveBeenCalledWith('https://loja.example.com/hooks', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('notifica o lojista quando o webhook confirma o Pix', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await request(app).put('/v1/merchant/notification-url').set('Authorization', ACME).send({ url: 'https://loja.example.com/hooks' });
+
+    const pay = await createPayment({ amount: 1_000, method: 'pix' });
+    await sendWebhook({ id: 'evt_n1', type: 'payment.paid', data: { paymentId: pay.body.id } }).expect(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejeita URL inválida', async () => {
+    await request(app).put('/v1/merchant/notification-url').set('Authorization', ACME).send({ url: 'nao-e-url' }).expect(400);
   });
 });
 

@@ -19,6 +19,8 @@ export interface Merchant {
   name: string;
   /** SHA-256 da API key. A chave em texto puro nunca é armazenada. */
   apiKeyHash: string;
+  /** URL que recebe POSTs quando o status de um pagamento muda. */
+  notificationUrl?: string;
 }
 
 export interface Payment {
