@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
 import type { AppConfig } from '../src/config.js';
 import { signPayload } from '../src/services/webhookSignature.js';
@@ -80,6 +80,37 @@ describe('pagamentos com cartão', () => {
     expect((await createPayment({ amount: 1000, method: 'credit_card' })).status).toBe(400);
     expect((await createPayment({ amount: 1000, method: 'pix', card: validCard })).status).toBe(400);
     expect((await createPayment({ amount: 1000, method: 'credit_card', card: { ...validCard, number: '4111111111111112' } })).status).toBe(400);
+  });
+});
+
+describe('filtro por data', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function createAt(iso: string) {
+    vi.setSystemTime(new Date(iso));
+    return createPayment({ amount: 1_000, method: 'pix' });
+  }
+
+  it('filtra por intervalo inclusivo', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    await createAt('2026-03-01T10:00:00Z');
+    await createAt('2026-03-15T10:00:00Z');
+    await createAt('2026-04-01T10:00:00Z');
+
+    const res = await request(app)
+      .get('/v1/payments')
+      .query({ createdFrom: '2026-03-01T10:00:00Z', createdTo: '2026-03-31T23:59:59Z' })
+      .set('Authorization', ACME);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(2);
+  });
+
+  it('valida formato e ordem das datas', async () => {
+    const list = (query: object) => request(app).get('/v1/payments').query(query).set('Authorization', ACME);
+    expect((await list({ createdFrom: '01/03/2026' })).status).toBe(400);
+    expect((await list({ createdFrom: '2026-04-01T00:00:00Z', createdTo: '2026-03-01T00:00:00Z' })).status).toBe(400);
   });
 });
 

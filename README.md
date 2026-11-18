@@ -24,7 +24,7 @@ npm run typecheck
 |---|---|
 | Health check | `GET /health` |
 | Criar pagamento (Pix, boleto, cartão) | `POST /v1/payments` |
-| Listar / consultar | `GET /v1/payments`, `GET /v1/payments/:id` |
+| Listar (filtros: `status`, `createdFrom`, `createdTo`, `limit`) / consultar | `GET /v1/payments`, `GET /v1/payments/:id` |
 | Capturar pré-autorização | `POST /v1/payments/:id/capture` |
 | Cancelar | `POST /v1/payments/:id/cancel` |
 | Estorno total/parcial | `POST /v1/payments/:id/refunds` |
