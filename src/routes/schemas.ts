@@ -38,6 +38,11 @@ export const listPaymentsQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+export const searchPaymentsQuery = z.object({
+  q: z.string().trim().min(1).max(200),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
 export const createRefundSchema = z
   .object({
     amount: amountCents.optional(),

@@ -3,7 +3,13 @@ import { currentMerchant } from '../middleware/auth.js';
 import { idempotency } from '../middleware/idempotency.js';
 import type { PaymentService } from '../services/paymentService.js';
 import type { MemoryStore } from '../store/memoryStore.js';
-import { createPaymentSchema, createRefundSchema, listPaymentsQuery, paymentIdParam } from './schemas.js';
+import {
+  createPaymentSchema,
+  createRefundSchema,
+  listPaymentsQuery,
+  paymentIdParam,
+  searchPaymentsQuery,
+} from './schemas.js';
 
 export function paymentsRouter(service: PaymentService, store: MemoryStore): Router {
   const router = Router();
@@ -18,6 +24,11 @@ export function paymentsRouter(service: PaymentService, store: MemoryStore): Rou
   router.get('/', (req, res) => {
     const filter = listPaymentsQuery.parse(req.query);
     res.json({ data: service.list(currentMerchant(req).id, filter) });
+  });
+
+  router.get('/search', (req, res) => {
+    const { q, limit } = searchPaymentsQuery.parse(req.query);
+    res.json({ data: service.search(q, limit) });
   });
 
   router.get('/:id', (req, res) => {

@@ -100,6 +100,15 @@ export class PaymentService {
       .slice(0, filter.limit);
   }
 
+  /** Busca textual na descrição (case-insensitive). Ex.: "pedido 12" ou "assinatura|mensal". */
+  search(query: string, limit: number): Payment[] {
+    const pattern = new RegExp(query, 'i');
+    return [...this.store.payments.values()]
+      .filter((p) => p.description !== undefined && pattern.test(p.description))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
   capture(merchantId: string, paymentId: string): Payment {
     const payment = this.get(merchantId, paymentId);
     if (payment.status !== 'authorized') {
