@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { formatBRL, reaisToCents } from '../lib/money.js';
 import { currentMerchant } from '../middleware/auth.js';
 import { idempotency } from '../middleware/idempotency.js';
 import type { PaymentService } from '../services/paymentService.js';
@@ -10,9 +11,10 @@ export function paymentsRouter(service: PaymentService, store: MemoryStore): Rou
   const idem = idempotency(store);
 
   router.post('/', idem, (req, res) => {
-    const input = createPaymentSchema.parse(req.body);
-    const payment = service.create(currentMerchant(req).id, input);
-    res.status(201).json(payment);
+    const { amountDecimal, ...input } = createPaymentSchema.parse(req.body);
+    const amount = input.amount ?? reaisToCents(amountDecimal!);
+    const payment = service.create(currentMerchant(req).id, { ...input, amount });
+    res.status(201).json({ ...payment, amountFormatted: formatBRL(payment.amount) });
   });
 
   router.get('/', (req, res) => {

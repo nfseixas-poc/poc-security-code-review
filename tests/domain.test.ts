@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { detectBrand, isExpired, isValidLuhn, summarizeCard } from '../src/domain/card.js';
 import { calculateFee } from '../src/domain/fees.js';
 import { canTransition } from '../src/domain/stateMachine.js';
+import { formatBRL, reaisToCents } from '../src/lib/money.js';
 
 describe('calculateFee', () => {
   it('pix: 0,99% com arredondamento half-up', () => {
@@ -53,5 +54,18 @@ describe('state machine', () => {
     expect(canTransition('refunded', 'captured')).toBe(false);
     expect(canTransition('failed', 'captured')).toBe(false);
     expect(canTransition('captured', 'canceled')).toBe(false);
+  });
+});
+
+describe('money', () => {
+  it('converte reais para centavos', () => {
+    expect(reaisToCents('150')).toBe(15_000);
+    expect(reaisToCents('150.00')).toBe(15_000);
+    expect(reaisToCents('99.90')).toBe(9_990);
+    expect(reaisToCents('0.5')).toBe(50);
+  });
+
+  it('formata em BRL', () => {
+    expect(formatBRL(15_010).replace(/\s/g, ' ')).toBe('R$ 150,10');
   });
 });

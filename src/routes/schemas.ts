@@ -14,7 +14,9 @@ const cardSchema = z.object({
 
 export const createPaymentSchema = z
   .object({
-    amount: amountCents,
+    amount: amountCents.optional(),
+    /** Alternativa a `amount` para integrações que trabalham em reais, ex.: "150.10". */
+    amountDecimal: z.string().regex(/^\d+(\.\d+)?$/, 'use ponto como separador decimal').optional(),
     method: z.enum(['pix', 'boleto', 'credit_card']),
     installments: z.number().int().min(1).max(MAX_INSTALLMENTS).optional(),
     capture: z.boolean().optional(),
@@ -22,6 +24,10 @@ export const createPaymentSchema = z
     card: cardSchema.optional(),
   })
   .strict()
+  .refine((p) => (p.amount === undefined) !== (p.amountDecimal === undefined), {
+    message: 'informe amount (centavos) ou amountDecimal (reais), não ambos',
+    path: ['amount'],
+  })
   .refine((p) => p.method !== 'credit_card' || p.card !== undefined, {
     message: 'card é obrigatório quando method = credit_card',
     path: ['card'],
