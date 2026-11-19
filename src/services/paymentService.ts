@@ -28,6 +28,8 @@ export interface CreatePaymentInput {
 
 export interface ListPaymentsFilter {
   status?: PaymentStatus;
+  createdFrom?: string;
+  createdTo?: string;
   limit: number;
 }
 
@@ -93,9 +95,15 @@ export class PaymentService {
   }
 
   list(merchantId: string, filter: ListPaymentsFilter): Payment[] {
+    const from = filter.createdFrom ? Date.parse(filter.createdFrom) : -Infinity;
+    const to = filter.createdTo ? Date.parse(filter.createdTo) : Infinity;
     return [...this.store.payments.values()]
       .filter((p) => p.merchantId === merchantId)
       .filter((p) => !filter.status || p.status === filter.status)
+      .filter((p) => {
+        const created = Date.parse(p.createdAt);
+        return created >= from && created <= to;
+      })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, filter.limit);
   }

@@ -31,12 +31,20 @@ export const createPaymentSchema = z
     path: ['card'],
   });
 
-export const listPaymentsQuery = z.object({
-  status: z
-    .enum(['pending', 'authorized', 'captured', 'partially_refunded', 'refunded', 'failed', 'canceled'])
-    .optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-});
+export const listPaymentsQuery = z
+  .object({
+    status: z
+      .enum(['pending', 'authorized', 'captured', 'partially_refunded', 'refunded', 'failed', 'canceled'])
+      .optional(),
+    /** Intervalo inclusivo em ISO 8601 (UTC), ex.: 2026-01-01T00:00:00Z */
+    createdFrom: z.iso.datetime().optional(),
+    createdTo: z.iso.datetime().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+  })
+  .refine((q) => !q.createdFrom || !q.createdTo || Date.parse(q.createdFrom) <= Date.parse(q.createdTo), {
+    message: 'createdFrom deve ser anterior ou igual a createdTo',
+    path: ['createdFrom'],
+  });
 
 export const createRefundSchema = z
   .object({
