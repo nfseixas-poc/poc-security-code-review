@@ -39,7 +39,13 @@ export const listPaymentsQuery = z.object({
 });
 
 export const searchPaymentsQuery = z.object({
-  q: z.string().trim().min(1).max(200),
+  /** Termos literais separados por "|" (no máximo 10). */
+  q: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .refine((q) => q.split('|').length <= 10, 'no máximo 10 termos separados por "|"'),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 

@@ -28,7 +28,7 @@ export function paymentsRouter(service: PaymentService, store: MemoryStore): Rou
 
   router.get('/search', (req, res) => {
     const { q, limit } = searchPaymentsQuery.parse(req.query);
-    res.json({ data: service.search(q, limit) });
+    res.json({ data: service.search(currentMerchant(req).id, q, limit) });
   });
 
   router.get('/:id', (req, res) => {
