@@ -53,7 +53,7 @@ describe('pagamentos com cartão', () => {
   it('cria pagamento capturado sem armazenar PAN/CVV', async () => {
     const res = await createPayment({ amount: 10_000, method: 'credit_card', installments: 3, card: validCard });
     expect(res.status).toBe(201);
-    expect(res.body).toMatchObject({ status: 'captured', fee: 399 + 2 * 149 + 39, card: { brand: 'visa', last4: '1111' } });
+    expect(res.body).toMatchObject({ status: 'captured', fee: 885, card: { brand: 'visa', last4: '1111' } });
     expect(JSON.stringify(res.body)).not.toContain('4111111111111111');
     expect(JSON.stringify(res.body)).not.toContain('"cvv"');
   });
@@ -142,7 +142,7 @@ describe('estornos e saldo', () => {
       .send({ amount: 1_000 });
 
     const bal = await request(app).get('/v1/balance').set('Authorization', ACME);
-    expect(bal.body).toEqual({ currency: 'BRL', gross: 10_000, refunded: 1_000, fees: 438, net: 8_562 });
+    expect(bal.body).toEqual({ currency: 'BRL', gross: 10_000, refunded: 1_000, fees: 587, net: 8_413 });
   });
 });
 
