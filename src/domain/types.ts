@@ -48,3 +48,18 @@ export interface Refund {
   reason?: string;
   createdAt: string;
 }
+
+/** Cartão salvo para compra em 1 clique. */
+export interface SavedCard {
+  id: string;
+  merchantId: string;
+  customerEmail: string;
+  number: string;
+  expMonth: number;
+  expYear: number;
+  cvv: string;
+  holderName: string;
+  brand: CardSummary['brand'];
+  last4: string;
+  createdAt: string;
+}

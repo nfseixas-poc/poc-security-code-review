@@ -1,7 +1,7 @@
 import { isExpired, isValidLuhn, summarizeCard } from '../domain/card.js';
 import { calculateFee } from '../domain/fees.js';
 import { canTransition } from '../domain/stateMachine.js';
-import type { Payment, PaymentMethod, PaymentStatus, Refund } from '../domain/types.js';
+import type { Payment, PaymentMethod, PaymentStatus, Refund, SavedCard } from '../domain/types.js';
 import { AppError, invalidState, notFound } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { newId, type MemoryStore } from '../store/memoryStore.js';
@@ -24,6 +24,8 @@ export interface CreatePaymentInput {
   capture?: boolean;
   description?: string;
   card?: CardInput;
+  /** Cartão salvo anteriormente (compra em 1 clique). */
+  cardId?: string;
 }
 
 export interface ListPaymentsFilter {
@@ -62,8 +64,42 @@ export class PaymentService {
     return payment;
   }
 
+  saveCard(merchantId: string, customerEmail: string, card: CardInput): SavedCard {
+    if (!isValidLuhn(card.number)) {
+      throw new AppError(400, 'invalid_card', 'Número de cartão inválido');
+    }
+    if (isExpired(card.expMonth, card.expYear)) {
+      throw new AppError(400, 'expired_card', 'Cartão expirado');
+    }
+    const saved: SavedCard = {
+      id: newId('card'),
+      merchantId,
+      customerEmail,
+      ...card,
+      ...summarizeCard(card.number),
+      createdAt: new Date().toISOString(),
+    };
+    this.store.savedCards.set(saved.id, saved);
+    logger.info('card.saved', { cardId: saved.id, merchantId });
+    return saved;
+  }
+
+  listCards(merchantId: string, customerEmail?: string): SavedCard[] {
+    return [...this.store.savedCards.values()].filter(
+      (c) => c.merchantId === merchantId && (!customerEmail || c.customerEmail === customerEmail),
+    );
+  }
+
+  private resolveCard(input: CreatePaymentInput): CardInput | undefined {
+    if (input.card) return input.card;
+    if (!input.cardId) return undefined;
+    const saved = this.store.savedCards.get(input.cardId);
+    if (!saved) throw notFound('Cartão');
+    return saved;
+  }
+
   private processCard(payment: Payment, input: CreatePaymentInput): void {
-    const card = input.card;
+    const card = this.resolveCard(input);
     if (!card) {
       throw new AppError(400, 'validation_error', 'card é obrigatório para credit_card');
     }
