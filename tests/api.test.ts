@@ -83,6 +83,20 @@ describe('pagamentos com cartão', () => {
   });
 });
 
+describe('valor em reais', () => {
+  it('aceita amountDecimal e devolve valor formatado', async () => {
+    const res = await createPayment({ amountDecimal: '250.00', method: 'pix' });
+    expect(res.status).toBe(201);
+    expect(res.body.amount).toBe(25_000);
+    expect(res.body.amountFormatted.replace(/\s/g, ' ')).toBe('R$ 250,00');
+  });
+
+  it('rejeita amount e amountDecimal juntos ou nenhum dos dois', async () => {
+    expect((await createPayment({ amount: 1_000, amountDecimal: '10.00', method: 'pix' })).status).toBe(400);
+    expect((await createPayment({ method: 'pix' })).status).toBe(400);
+  });
+});
+
 describe('isolamento entre lojistas', () => {
   it('um lojista não enxerga pagamento de outro', async () => {
     const created = await createPayment({ amount: 1_000, method: 'pix' }, ACME);
