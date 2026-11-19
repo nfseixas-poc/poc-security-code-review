@@ -3,7 +3,9 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
 import type { AppConfig } from '../src/config.js';
+import { FakeGatewayClient } from '../src/services/gatewayClient.js';
 import { signPayload } from '../src/services/webhookSignature.js';
+import { createSeededStore } from '../src/store/memoryStore.js';
 
 const config: AppConfig = { port: 0, webhookSecret: 'whsec_test', webhookToleranceSeconds: 300 };
 const ACME = 'Bearer sk_test_acme_123';
@@ -19,7 +21,7 @@ const validCard = {
 
 let app: ReturnType<typeof createApp>;
 beforeEach(() => {
-  app = createApp(config);
+  app = createApp(config, createSeededStore(), new FakeGatewayClient(1));
 });
 
 const idemKey = () => `idem-${randomUUID()}`;
@@ -143,6 +145,29 @@ describe('estornos e saldo', () => {
 
     const bal = await request(app).get('/v1/balance').set('Authorization', ACME);
     expect(bal.body).toEqual({ currency: 'BRL', gross: 10_000, refunded: 1_000, fees: 438, net: 8_562 });
+  });
+});
+
+describe('estorno em lote', () => {
+  it('estorna vários pagamentos e reporta falhas individualmente', async () => {
+    const a = await createPayment({ amount: 5_000, method: 'credit_card', card: validCard });
+    const b = await createPayment({ amount: 7_000, method: 'credit_card', card: validCard });
+    const pix = await createPayment({ amount: 1_000, method: 'pix' }); // pending: não estornável
+
+    const res = await request(app)
+      .post('/v1/refunds/batch')
+      .set('Authorization', ACME)
+      .set('Idempotency-Key', idemKey())
+      .send({ items: [{ paymentId: a.body.id }, { paymentId: b.body.id, amount: 2_000 }, { paymentId: pix.body.id }] });
+
+    expect(res.status).toBe(207);
+    expect(res.body.data.map((r: { ok: boolean }) => r.ok)).toEqual([true, true, false]);
+    expect(res.body.data[2].error).toBe('invalid_state');
+
+    const pa = await request(app).get(`/v1/payments/${a.body.id}`).set('Authorization', ACME);
+    const pb = await request(app).get(`/v1/payments/${b.body.id}`).set('Authorization', ACME);
+    expect(pa.body.status).toBe('refunded');
+    expect(pb.body).toMatchObject({ status: 'partially_refunded', refundedAmount: 2_000 });
   });
 });
 

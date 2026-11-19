@@ -45,6 +45,23 @@ export const createRefundSchema = z
   })
   .strict();
 
+export const batchRefundSchema = z
+  .object({
+    items: z
+      .array(
+        z
+          .object({
+            paymentId: z.string().regex(/^pay_[a-f0-9]{24}$/),
+            amount: amountCents.optional(),
+            reason: z.string().trim().max(255).optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(50),
+  })
+  .strict();
+
 export const paymentIdParam = z.object({
   id: z.string().regex(/^pay_[a-f0-9]{24}$/, 'id de pagamento inválido'),
 });
