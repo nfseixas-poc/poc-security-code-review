@@ -100,6 +100,27 @@ export class PaymentService {
       .slice(0, filter.limit);
   }
 
+  /**
+   * Busca textual na descrição, restrita ao lojista. Case-insensitive e literal:
+   * "|" separa termos alternativos (ex.: "mensal|anual"); nenhum outro caractere é especial.
+   */
+  search(merchantId: string, query: string, limit: number): Payment[] {
+    const terms = query
+      .split('|')
+      .map((t) => t.trim().toLocaleLowerCase('pt-BR'))
+      .filter((t) => t.length > 0);
+    if (terms.length === 0) return [];
+
+    return [...this.store.payments.values()]
+      .filter((p) => p.merchantId === merchantId && p.description !== undefined)
+      .filter((p) => {
+        const description = p.description!.toLocaleLowerCase('pt-BR');
+        return terms.some((t) => description.includes(t));
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
   capture(merchantId: string, paymentId: string): Payment {
     const payment = this.get(merchantId, paymentId);
     if (payment.status !== 'authorized') {

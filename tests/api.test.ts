@@ -92,6 +92,52 @@ describe('isolamento entre lojistas', () => {
   });
 });
 
+describe('busca', () => {
+  it('encontra pagamentos pela descrição', async () => {
+    await createPayment({ amount: 1_000, method: 'pix', description: 'Pedido #123 - camiseta' });
+    await createPayment({ amount: 2_000, method: 'pix', description: 'Pedido #456 - caneca' });
+
+    const res = await request(app).get('/v1/payments/search?q=camiseta').set('Authorization', ACME);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].description).toBe('Pedido #123 - camiseta');
+  });
+
+  it('aceita alternativas na busca', async () => {
+    await createPayment({ amount: 1_000, method: 'pix', description: 'Assinatura mensal' });
+    await createPayment({ amount: 2_000, method: 'pix', description: 'Assinatura anual' });
+
+    const res = await request(app).get('/v1/payments/search').query({ q: 'mensal|anual' }).set('Authorization', ACME);
+    expect(res.body.data).toHaveLength(2);
+  });
+
+  it('não retorna pagamentos de outro lojista', async () => {
+    await createPayment({ amount: 1_000, method: 'pix', description: 'Pedido secreto' }, GLOBEX);
+
+    const res = await request(app).get('/v1/payments/search').query({ q: 'secreto' }).set('Authorization', ACME);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
+  });
+
+  it('trata caracteres especiais como texto literal', async () => {
+    await createPayment({ amount: 1_000, method: 'pix', description: 'Kit [promo] (a+)+' });
+
+    for (const q of ['[', '(a+)+$', '.*']) {
+      const res = await request(app).get('/v1/payments/search').query({ q }).set('Authorization', ACME);
+      expect(res.status).toBe(200);
+    }
+    const literal = await request(app).get('/v1/payments/search').query({ q: '[promo]' }).set('Authorization', ACME);
+    expect(literal.body.data).toHaveLength(1);
+    const wildcard = await request(app).get('/v1/payments/search').query({ q: '.*' }).set('Authorization', ACME);
+    expect(wildcard.body.data).toHaveLength(0);
+  });
+
+  it('limita a quantidade de termos', async () => {
+    const q = Array.from({ length: 11 }, (_, i) => `t${i}`).join('|');
+    await request(app).get('/v1/payments/search').query({ q }).set('Authorization', ACME).expect(400);
+  });
+});
+
 describe('idempotência', () => {
   it('repete a resposta original para mesma chave e mesmo corpo', async () => {
     const key = idemKey();
