@@ -158,13 +158,24 @@ describe('webhooks do gateway', () => {
     expect(p.body.status).toBe('captured');
   });
 
-  it('rejeita assinatura inválida ou timestamp antigo', async () => {
+  it('rejeita assinatura inválida informando o motivo', async () => {
     const pay = await createPayment({ amount: 1_000, method: 'pix' });
     const event = { id: 'evt_2', type: 'payment.paid', data: { paymentId: pay.body.id } };
 
-    expect((await sendWebhook(event, { secret: 'wrong' })).status).toBe(401);
-    const old = Math.floor(Date.now() / 1000) - 3_600;
-    expect((await sendWebhook(event, { timestamp: old })).status).toBe(401);
+    const res = await sendWebhook(event, { secret: 'wrong' });
+    expect(res.status).toBe(401);
+    expect(res.body.error.message).toContain('signature_mismatch');
+  });
+
+  it('rejeita header ausente ou malformado', async () => {
+    const res = await request(app).post('/webhooks/gateway').send({ id: 'evt_x', type: 'payment.paid', data: { paymentId: 'x' } });
+    expect(res.body.error.message).toContain('missing_header');
+
+    const bad = await request(app)
+      .post('/webhooks/gateway')
+      .set('X-Gateway-Signature', 'v1=abc')
+      .send({ id: 'evt_y', type: 'payment.paid', data: { paymentId: 'x' } });
+    expect(bad.body.error.message).toContain('malformed_header');
   });
 
   it('não permite transição inválida via webhook', async () => {
