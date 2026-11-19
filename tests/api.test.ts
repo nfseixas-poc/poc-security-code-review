@@ -146,6 +146,35 @@ describe('estornos e saldo', () => {
   });
 });
 
+describe('endpoints internos de suporte', () => {
+  const SUPPORT = 'sup_7f3a9c2e1b8d4f60a5e9';
+
+  it('exige token de suporte', async () => {
+    await request(app).get('/internal/payments').expect(401);
+    await request(app).get('/internal/payments').set('X-Support-Token', 'errado').expect(401);
+  });
+
+  it('lista pagamentos filtrando por lojista', async () => {
+    await createPayment({ amount: 1_000, method: 'pix' }, ACME);
+    await createPayment({ amount: 2_000, method: 'pix' }, GLOBEX);
+
+    const all = await request(app).get('/internal/payments').set('X-Support-Token', SUPPORT);
+    expect(all.body.data).toHaveLength(2);
+    const acme = await request(app).get('/internal/payments?merchantId=mer_acme').set('X-Support-Token', SUPPORT);
+    expect(acme.body.data).toHaveLength(1);
+  });
+
+  it('destrava pagamento Pix cujo webhook se perdeu', async () => {
+    const pay = await createPayment({ amount: 1_000, method: 'pix' });
+    const res = await request(app)
+      .post(`/internal/payments/${pay.body.id}/status`)
+      .set('X-Support-Token', SUPPORT)
+      .send({ status: 'captured', note: 'Confirmado manualmente no painel do gateway' });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('captured');
+  });
+});
+
 describe('webhooks do gateway', () => {
   it('confirma Pix com assinatura válida e ignora duplicatas', async () => {
     const pay = await createPayment({ amount: 1_000, method: 'pix' });
