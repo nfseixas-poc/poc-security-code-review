@@ -3,6 +3,7 @@ import type { AppConfig } from '../config.js';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import type { PaymentService } from '../services/paymentService.js';
+import { notifyPaymentUpdated } from '../services/notifier.js';
 import { verifySignature } from '../services/webhookSignature.js';
 import type { MemoryStore } from '../store/memoryStore.js';
 import { gatewayEventSchema } from './schemas.js';
@@ -28,8 +29,11 @@ export function webhooksRouter(service: PaymentService, store: MemoryStore, conf
     }
 
     const status = event.type === 'payment.paid' ? 'captured' : 'failed';
-    service.applyGatewayStatus(event.data.paymentId, status);
+    const payment = service.applyGatewayStatus(event.data.paymentId, status);
     store.processedEvents.add(event.id);
+
+    const merchant = store.merchants.get(payment.merchantId);
+    if (merchant) notifyPaymentUpdated(merchant, payment);
 
     logger.info('webhook.processed', { eventId: event.id, type: event.type });
     res.json({ received: true });
